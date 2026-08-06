@@ -1,0 +1,111 @@
+# ============================================
+# Dependencies
+# ============================================
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# ============================================
+# Environment variables and secrets
+# ============================================
+.env
+.env.*
+!.env.example
+
+client/.env
+client/.env.local
+client/.env.development
+client/.env.production
+client/.env.test
+
+server/.env
+server/.env.local
+server/.env.development
+server/.env.production
+server/.env.test
+
+# ============================================
+# Private keys and certificates
+# ============================================
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# ============================================
+# Credentials and service-account files
+# ============================================
+credentials.json
+service-account.json
+serviceAccount.json
+firebase-adminsdk*.json
+google-credentials*.json
+
+# ============================================
+# Build files
+# ============================================
+dist/
+build/
+client/dist/
+server/dist/
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================
+# Testing and coverage
+# ============================================
+coverage/
+.nyc_output/
+
+# ============================================
+# Cache and temporary files
+# ============================================
+.cache/
+.temp/
+tmp/
+*.tmp
+*.temp
+
+# ============================================
+# Editor files
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================================
+# Operating-system files
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# Vite
+# ============================================
+.vite/
+
+# ============================================
+# MongoDB local data
+# ============================================
+data/
+db/
+mongodb-data/
+
+# ============================================
+# Backup files
+# ============================================
+*.bak
+*.backup
+*.old
