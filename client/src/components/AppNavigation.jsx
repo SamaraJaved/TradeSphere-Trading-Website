@@ -108,6 +108,24 @@ function AppNavigation() {
           return;
         }
 
+        const autoClosedTrades =
+          Array.isArray(
+            portfolioData.automaticallyClosedTrades
+          )
+            ? portfolioData.automaticallyClosedTrades
+            : [];
+
+        autoClosedTrades.forEach(
+          (trade) => {
+            window.dispatchEvent(
+              new CustomEvent(
+                "tradesphere-trade-closed",
+                { detail: { trade } }
+              )
+            );
+          }
+        );
+
         const updatedUser = {
           ...profileData.user,
           virtualBalance:
@@ -131,6 +149,68 @@ function AppNavigation() {
 
     loadNavigationData();
   }, [location.pathname]);
+
+  useEffect(() => {
+    let stopped = false;
+
+    async function checkForAutoClosedTrades() {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/trades/active`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok || stopped) {
+          return;
+        }
+
+        const data = await response.json();
+
+        const closedTrades = Array.isArray(
+          data.automaticallyClosedTrades
+        )
+          ? data.automaticallyClosedTrades
+          : [];
+
+        closedTrades.forEach((trade) => {
+          window.dispatchEvent(
+            new CustomEvent(
+              "tradesphere-trade-closed",
+              { detail: { trade } }
+            )
+          );
+        });
+      } catch (error) {
+        console.error(
+          "Auto-close check error:",
+          error
+        );
+      }
+    }
+
+    checkForAutoClosedTrades();
+
+    const autoCloseTimer = setInterval(
+      checkForAutoClosedTrades,
+      5000
+    );
+
+    return () => {
+      stopped = true;
+      clearInterval(autoCloseTimer);
+    };
+  }, []);
 
   return (
     <header className="app-navigation">

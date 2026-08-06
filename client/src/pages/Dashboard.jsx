@@ -332,6 +332,24 @@ function Dashboard() {
           return;
         }
 
+        const autoClosedTrades =
+          Array.isArray(
+            portfolioData.automaticallyClosedTrades
+          )
+            ? portfolioData.automaticallyClosedTrades
+            : [];
+
+        autoClosedTrades.forEach(
+          (trade) => {
+            window.dispatchEvent(
+              new CustomEvent(
+                "tradesphere-trade-closed",
+                { detail: { trade } }
+              )
+            );
+          }
+        );
+
         const loadedUser =
           profileData.user;
 

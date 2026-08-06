@@ -160,6 +160,17 @@ const tradeSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    /*
+      Set to true only after the
+      trade-closed email has been sent
+      successfully, so a closed position
+      never triggers a duplicate email.
+    */
+    closeNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -121,6 +121,40 @@ function formatSignedMoney(value) {
   return "$0.00";
 }
 
+function buildSparklinePoints(candles) {
+  if (
+    !Array.isArray(candles) ||
+    candles.length < 2
+  ) {
+    return "";
+  }
+
+  const recentCandles = candles.slice(-40);
+
+  const closes = recentCandles.map(
+    (candle) => candle.close
+  );
+
+  const minClose = Math.min(...closes);
+  const maxClose = Math.max(...closes);
+  const range = maxClose - minClose || 1;
+
+  return closes
+    .map((close, index) => {
+      const x =
+        closes.length > 1
+          ? (index / (closes.length - 1)) * 120
+          : 60;
+
+      const y =
+        34 -
+        ((close - minClose) / range) * 32;
+
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
 function formatQuantityForChart(value) {
   return Number(value || 0).toLocaleString("en-US", {
     minimumFractionDigits: 0,
@@ -1011,6 +1045,44 @@ function TradingChart({
   const [positionEditDrawing, setPositionEditDrawing] =
     useState(null);
 
+  const [chartWarning, setChartWarning] =
+    useState("");
+
+  const [isConfirmingClearAll, setIsConfirmingClearAll] =
+    useState(false);
+
+  const chartWarningTimerRef = useRef(null);
+
+  function showChartWarning(message) {
+    setChartWarning(message);
+
+    if (chartWarningTimerRef.current) {
+      clearTimeout(chartWarningTimerRef.current);
+    }
+
+    chartWarningTimerRef.current = setTimeout(() => {
+      setChartWarning("");
+      chartWarningTimerRef.current = null;
+    }, 4000);
+  }
+
+  function dismissChartWarning() {
+    if (chartWarningTimerRef.current) {
+      clearTimeout(chartWarningTimerRef.current);
+      chartWarningTimerRef.current = null;
+    }
+
+    setChartWarning("");
+  }
+
+  useEffect(() => {
+    return () => {
+      if (chartWarningTimerRef.current) {
+        clearTimeout(chartWarningTimerRef.current);
+      }
+    };
+  }, []);
+
   const storageKey =
     `tradesphere-drawings-${selectedAsset.productId}`;
 
@@ -1769,7 +1841,7 @@ function TradingChart({
         !Number.isFinite(livePrice) ||
         livePrice <= 0
       ) {
-        window.alert(
+        showChartWarning(
           "The live entry price is not ready yet."
         );
         setActiveTool("pointer");
@@ -1862,7 +1934,7 @@ function TradingChart({
         entryCoordinate === null ||
         entryCoordinate === undefined
       ) {
-        window.alert(
+        showChartWarning(
           "The live entry price is not ready yet."
         );
         resetRiskInteraction();
@@ -1874,7 +1946,7 @@ function TradingChart({
         entryCoordinate <= topChartY ||
         entryCoordinate >= bottomChartY
       ) {
-        window.alert(
+        showChartWarning(
           "Draw the risk/reward rectangle across the current price line so the entry price stays inside the rectangle."
         );
         resetRiskInteraction();
@@ -1900,7 +1972,7 @@ function TradingChart({
         topPrice <= 0 ||
         bottomPrice <= 0
       ) {
-        window.alert(
+        showChartWarning(
           "The selected chart prices could not be calculated."
         );
         resetRiskInteraction();
@@ -2222,24 +2294,24 @@ function TradingChart({
     setSelectedDrawingId("");
   }
 
-  function clearAllDrawings() {
+  function requestClearAllDrawings() {
     if (drawings.length === 0) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        "Delete all drawings from this chart?"
-      );
+    setIsConfirmingClearAll(true);
+  }
 
-    if (!confirmed) {
-      return;
-    }
+  function cancelClearAllDrawings() {
+    setIsConfirmingClearAll(false);
+  }
 
+  function confirmClearAllDrawings() {
     setDrawings([]);
     setSelectedDrawingId("");
     setDraftDrawing(null);
     setActiveTool("pointer");
+    setIsConfirmingClearAll(false);
   }
 
   const combinedDrawings = positionEditDrawing
@@ -2650,9 +2722,30 @@ function TradingChart({
         }}
         selectedDrawingId={selectedDrawingId}
         deleteSelectedDrawing={deleteSelectedDrawing}
-        clearAllDrawings={clearAllDrawings}
+        clearAllDrawings={requestClearAllDrawings}
         openCalculator={() => setIsCalculatorOpen(true)}
       />
+
+      {chartWarning && (
+        <div className="chart-warning-banner">
+          <span className="chart-warning-icon">
+            ⚠
+          </span>
+
+          <span className="chart-warning-text">
+            {chartWarning}
+          </span>
+
+          <button
+            type="button"
+            className="chart-warning-dismiss"
+            aria-label="Dismiss warning"
+            onClick={dismissChartWarning}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {isCalculatorOpen && (
         <ChartCalculator
@@ -2731,7 +2824,204 @@ function TradingChart({
         {activeTool === "text" &&
           "Click the chart to add a text note."}
       </div>
+
+      {isConfirmingClearAll && (
+        <div
+          className="trade-confirm-overlay"
+          onClick={cancelClearAllDrawings}
+        >
+          <div
+            className="trade-confirm-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="trade-confirm-icon close">
+              ⌫
+            </div>
+
+            <h3>Delete all drawings?</h3>
+
+            <p>
+              This removes every trend line, rectangle,
+              and risk/reward zone drawn on this chart.
+              This cannot be undone.
+            </p>
+
+            <div className="trade-confirm-actions">
+              <button
+                type="button"
+                className="trade-confirm-cancel"
+                onClick={cancelClearAllDrawings}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="trade-confirm-proceed close"
+                onClick={confirmClearAllDrawings}
+              >
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function MarketDetailsPanel({
+  selectedAsset,
+  currentPrice,
+  changeAmount24h,
+  change24h,
+  high24h,
+  low24h,
+  open24h,
+  direction,
+  candles,
+  isOpen,
+  onToggle,
+}) {
+  const directionLabel =
+    direction === "bullish"
+      ? "Bullish"
+      : direction === "bearish"
+        ? "Bearish"
+        : "Neutral";
+
+  const sparklinePoints = useMemo(
+    () => buildSparklinePoints(candles),
+    [candles]
+  );
+
+  return (
+    <section
+      className={`market-details-panel ${direction}`}
+    >
+      <button
+        type="button"
+        className="market-details-header"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+      >
+        <div className="market-details-heading-text">
+          <span className="eyebrow">
+            MARKET DETAILS
+          </span>
+
+          <h2>
+            {selectedAsset.name} ·{" "}
+            {selectedAsset.symbol}
+          </h2>
+        </div>
+
+        <span
+          className={`market-details-toggle-icon ${
+            isOpen ? "open" : ""
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="market-details-body">
+          <div className="market-details-price-row">
+            <strong className="market-details-price">
+              {Number.isFinite(currentPrice)
+                ? `$${formatMoney(currentPrice)}`
+                : "Loading..."}
+            </strong>
+
+            <span
+              className={`market-direction-badge ${direction}`}
+            >
+              {directionLabel}
+            </span>
+          </div>
+
+          <div className="market-details-sparkline">
+            <svg
+              viewBox="0 0 120 36"
+              preserveAspectRatio="none"
+            >
+              {sparklinePoints && (
+                <>
+                  <polygon
+                    points={`0,36 ${sparklinePoints} 120,36`}
+                    className={`market-sparkline-fill ${direction}`}
+                  />
+
+                  <polyline
+                    points={sparklinePoints}
+                    className={`market-sparkline-line ${direction}`}
+                  />
+                </>
+              )}
+            </svg>
+          </div>
+
+          <div className="market-details-change-row">
+            <span
+              className={`market-change-amount ${direction}`}
+            >
+              {Number.isFinite(changeAmount24h)
+                ? formatSignedMoney(
+                    changeAmount24h
+                  )
+                : "—"}
+            </span>
+
+            <span
+              className={`market-change-percent ${direction}`}
+            >
+              {Number.isFinite(change24h)
+                ? `${
+                    change24h > 0 ? "+" : ""
+                  }${change24h.toFixed(2)}%`
+                : "—"}
+            </span>
+
+            <span className="market-change-caption">
+              24h change
+            </span>
+          </div>
+
+          <div className="market-details-stats">
+            <div className="market-details-stat">
+              <span>24h High</span>
+
+              <strong>
+                {Number.isFinite(high24h)
+                  ? `$${formatMoney(high24h)}`
+                  : "—"}
+              </strong>
+            </div>
+
+            <div className="market-details-stat">
+              <span>24h Low</span>
+
+              <strong>
+                {Number.isFinite(low24h)
+                  ? `$${formatMoney(low24h)}`
+                  : "—"}
+              </strong>
+            </div>
+
+            <div className="market-details-stat">
+              <span>Opening Price</span>
+
+              <strong>
+                {Number.isFinite(open24h)
+                  ? `$${formatMoney(open24h)}`
+                  : "—"}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -2783,10 +3073,33 @@ function Trade() {
   const [skipConfirmChecked, setSkipConfirmChecked] =
     useState(false);
 
+  const [isMarketPanelOpen, setIsMarketPanelOpen] =
+    useState(true);
+
   const historicalCandlesReadyRef = useRef(false);
 
   const currentPrice = marketData?.price ?? null;
   const change24h = marketData?.change24h ?? null;
+  const open24h = marketData?.open24h ?? null;
+  const high24h = marketData?.high24h ?? null;
+  const low24h = marketData?.low24h ?? null;
+
+  const changeAmount24h =
+    Number.isFinite(currentPrice) &&
+    Number.isFinite(open24h)
+      ? currentPrice - open24h
+      : null;
+
+  const marketDirection = Number.isFinite(
+    change24h
+  )
+    ? change24h > 0
+      ? "bullish"
+      : change24h < 0
+        ? "bearish"
+        : "neutral"
+    : "neutral";
+
   const timeframeSeconds = getTimeframeSeconds(timeframe);
   const currentCandle = candles[candles.length - 1] || null;
 
@@ -3013,6 +3326,21 @@ function Trade() {
 
     if (data.automaticallyClosedCount > 0) {
       await loadPortfolio();
+
+      const closedTrades = Array.isArray(
+        data.automaticallyClosedTrades
+      )
+        ? data.automaticallyClosedTrades
+        : [];
+
+      closedTrades.forEach((trade) => {
+        window.dispatchEvent(
+          new CustomEvent(
+            "tradesphere-trade-closed",
+            { detail: { trade } }
+          )
+        );
+      });
 
       if (!silent) {
         setTradeResult(
@@ -3388,6 +3716,15 @@ function Trade() {
       setVirtualBalance(data.virtualBalance);
       updateStoredUserBalance(data.virtualBalance);
 
+      if (data.trade) {
+        window.dispatchEvent(
+          new CustomEvent(
+            "tradesphere-trade-closed",
+            { detail: { trade: data.trade } }
+          )
+        );
+      }
+
       await loadOpenPositions({ silent: true });
     } catch (error) {
       console.error("Close position error:", error);
@@ -3706,6 +4043,208 @@ function Trade() {
           padding: 22px;
         }
 
+        .trade-side-column {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .market-details-panel {
+          border: 1px solid #dfe5ec;
+          border-radius: 12px;
+          background: #ffffff;
+          overflow: hidden;
+        }
+
+        .market-details-header {
+          width: 100%;
+          padding: 16px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          border: none;
+          background: transparent;
+          text-align: left;
+        }
+
+        .market-details-heading-text .eyebrow {
+          display: block;
+          margin-bottom: 4px;
+          color: #16a34a;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.7px;
+        }
+
+        .market-details-heading-text h2 {
+          margin: 0;
+          color: #0f172a;
+          font-size: 15px;
+        }
+
+        .market-details-toggle-icon {
+          color: #64748b;
+          font-size: 12px;
+          transition: transform 0.15s ease;
+        }
+
+        .market-details-toggle-icon.open {
+          transform: rotate(180deg);
+        }
+
+        .market-details-body {
+          padding: 0 18px 18px;
+          display: grid;
+          gap: 14px;
+        }
+
+        .market-details-price-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .market-details-price {
+          color: #0f172a;
+          font-size: 24px;
+        }
+
+        .market-direction-badge {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .market-direction-badge.bullish {
+          color: #166534;
+          background: #dcfce7;
+        }
+
+        .market-direction-badge.bearish {
+          color: #991b1b;
+          background: #fee2e2;
+        }
+
+        .market-direction-badge.neutral {
+          color: #334155;
+          background: #e2e8f0;
+        }
+
+        .market-details-sparkline {
+          height: 44px;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+
+        .market-details-sparkline svg {
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+
+        .market-sparkline-line {
+          fill: none;
+          stroke-width: 2;
+          vector-effect: non-scaling-stroke;
+        }
+
+        .market-sparkline-line.bullish {
+          stroke: #16a34a;
+        }
+
+        .market-sparkline-line.bearish {
+          stroke: #dc2626;
+        }
+
+        .market-sparkline-line.neutral {
+          stroke: #64748b;
+        }
+
+        .market-sparkline-fill {
+          stroke: none;
+        }
+
+        .market-sparkline-fill.bullish {
+          fill: rgba(22, 163, 74, 0.12);
+        }
+
+        .market-sparkline-fill.bearish {
+          fill: rgba(220, 38, 38, 0.12);
+        }
+
+        .market-sparkline-fill.neutral {
+          fill: rgba(100, 116, 139, 0.1);
+        }
+
+        .market-details-change-row {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .market-change-amount.bullish,
+        .market-change-percent.bullish {
+          color: #16a34a;
+        }
+
+        .market-change-amount.bearish,
+        .market-change-percent.bearish {
+          color: #dc2626;
+        }
+
+        .market-change-amount.neutral,
+        .market-change-percent.neutral {
+          color: #64748b;
+        }
+
+        .market-change-caption {
+          color: #94a3b8;
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .market-details-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+
+        .market-details-stat {
+          padding: 9px 8px;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+
+        .market-details-stat span {
+          display: block;
+          color: #64748b;
+          font-size: 9px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+
+        .market-details-stat strong {
+          display: block;
+          margin-top: 4px;
+          color: #0f172a;
+          font-size: 12px;
+        }
+
+        @media (max-width: 480px) {
+          .market-details-stats {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .trade-chart-controls {
           margin-bottom: 14px;
           display: flex;
@@ -4018,6 +4557,66 @@ function Trade() {
         .professional-chart {
           width: 100%;
           min-height: 520px;
+        }
+
+        .chart-warning-banner {
+          width: min(420px, calc(100% - 32px));
+          padding: 10px 14px;
+          position: absolute;
+          top: 14px;
+          left: 50%;
+          z-index: 15;
+          display: flex;
+          align-items: flex-start;
+          gap: 9px;
+          border: 1px solid #fcd34d;
+          border-radius: 10px;
+          background: #fffbeb;
+          box-shadow: 0 12px 26px rgba(120, 53, 15, 0.18);
+          animation: chart-warning-in 0.18s ease-out;
+          transform: translateX(-50%);
+        }
+
+        .chart-warning-icon {
+          color: #b45309;
+          font-size: 14px;
+          line-height: 1.4;
+        }
+
+        .chart-warning-text {
+          flex: 1;
+          color: #78350f;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .chart-warning-dismiss {
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+          border: none;
+          border-radius: 6px;
+          color: #b45309;
+          background: transparent;
+          font-size: 15px;
+          line-height: 1;
+        }
+
+        .chart-warning-dismiss:hover {
+          color: #78350f;
+          background: rgba(180, 83, 9, 0.12);
+        }
+
+        @keyframes chart-warning-in {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -6px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
         }
 
         .chart-loading-message {
@@ -5019,6 +5618,25 @@ function Trade() {
             </section>
           </section>
 
+          <div className="trade-side-column">
+            <MarketDetailsPanel
+              selectedAsset={selectedAsset}
+              currentPrice={currentPrice}
+              changeAmount24h={changeAmount24h}
+              change24h={change24h}
+              high24h={high24h}
+              low24h={low24h}
+              open24h={open24h}
+              direction={marketDirection}
+              candles={candles}
+              isOpen={isMarketPanelOpen}
+              onToggle={() =>
+                setIsMarketPanelOpen(
+                  (previous) => !previous
+                )
+              }
+            />
+
           <aside className="trade-light-order-panel">
             <span className="trade-eyebrow">DEMO BROKER ORDER</span>
 
@@ -5129,6 +5747,7 @@ function Trade() {
               to Coinbase or another broker.
             </p>
           </aside>
+          </div>
         </div>
       </main>
 

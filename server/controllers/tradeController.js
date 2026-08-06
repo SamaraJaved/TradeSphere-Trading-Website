@@ -5,6 +5,10 @@ import {
   getCurrentPrice,
 } from "../services/marketDataService.js";
 
+import {
+  sendTradeClosedEmail,
+} from "../utils/sendEmail.js";
+
 const PRODUCT_ID_BY_ASSET = {
   BTC: "BTC-USD",
   ETH: "ETH-USD",
@@ -250,6 +254,51 @@ function validateRiskLevels({
 }
 
 /*
+  Sends the trade-closed email in the
+  background and only marks the trade as
+  notified once the email has actually
+  been sent, so a failed send can still
+  be retried and a successful send is
+  never repeated.
+
+  This is intentionally not awaited by
+  its caller so closing a position (or
+  closing several at once during the
+  automatic SL/TP check) never waits on
+  SMTP latency.
+*/
+function notifyTradeClosed(user, trade) {
+  if (
+    !user?.email ||
+    trade.closeNotificationSent
+  ) {
+    return;
+  }
+
+  sendTradeClosedEmail({
+    toEmail: user.email,
+    userName: user.name,
+    trade,
+    virtualBalance:
+      user.virtualBalance,
+  })
+    .then(() =>
+      Trade.findByIdAndUpdate(
+        trade._id,
+        {
+          closeNotificationSent: true,
+        }
+      )
+    )
+    .catch((error) => {
+      console.error(
+        "Trade closed email error:",
+        error
+      );
+    });
+}
+
+/*
   Closes one position using the latest
   trusted backend market price.
 
@@ -338,6 +387,11 @@ async function closePosition({
     );
 
   await updatedUser.save();
+
+  notifyTradeClosed(
+    updatedUser,
+    closedTrade
+  );
 
   return {
     trade: closedTrade,
@@ -975,9 +1029,10 @@ async function getTradeHistory(
   res
 ) {
   try {
-    await checkOpenPositionsForUser(
-      req.userId
-    );
+    const automaticallyClosed =
+      await checkOpenPositionsForUser(
+        req.userId
+      );
 
     const trades =
       await Trade.find({
@@ -999,6 +1054,12 @@ async function getTradeHistory(
         trades.length,
 
       trades,
+
+      automaticallyClosedCount:
+        automaticallyClosed.length,
+
+      automaticallyClosedTrades:
+        automaticallyClosed,
     });
   } catch (error) {
     console.error(
@@ -1022,9 +1083,10 @@ async function getPortfolioSummary(
   res
 ) {
   try {
-    await checkOpenPositionsForUser(
-      req.userId
-    );
+    const automaticallyClosed =
+      await checkOpenPositionsForUser(
+        req.userId
+      );
 
     const user =
       await User.findById(
@@ -1185,6 +1247,12 @@ async function getPortfolioSummary(
 
       openTrades:
         openTradesWithLiveValues,
+
+      automaticallyClosedCount:
+        automaticallyClosed.length,
+
+      automaticallyClosedTrades:
+        automaticallyClosed,
     });
   } catch (error) {
     console.error(

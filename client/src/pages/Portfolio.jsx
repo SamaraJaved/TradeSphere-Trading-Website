@@ -265,6 +265,24 @@ function Portfolio() {
           return;
         }
 
+        const autoClosedTrades =
+          Array.isArray(
+            activeTradesResult.automaticallyClosedTrades
+          )
+            ? activeTradesResult.automaticallyClosedTrades
+            : [];
+
+        autoClosedTrades.forEach(
+          (trade) => {
+            window.dispatchEvent(
+              new CustomEvent(
+                "tradesphere-trade-closed",
+                { detail: { trade } }
+              )
+            );
+          }
+        );
+
         const portfolio =
           portfolioResult.portfolio ||
           {};

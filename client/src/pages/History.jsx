@@ -77,6 +77,152 @@ function getCloseReasonLabel(
   );
 }
 
+const periodOptions = [
+  { value: "all", label: "All Time" },
+  { value: "this_week", label: "This Week" },
+  { value: "last_week", label: "Last Week" },
+  { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
+  { value: "this_year", label: "This Year" },
+  { value: "last_year", label: "Last Year" },
+];
+
+function startOfWeek(date) {
+  const dayIndex = date.getDay();
+
+  const daysSinceMonday =
+    dayIndex === 0 ? 6 : dayIndex - 1;
+
+  const monday = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() - daysSinceMonday
+  );
+
+  return monday;
+}
+
+/*
+  Returns the [start, end] boundary for a
+  period option, or null for "all" (no
+  date filtering).
+*/
+function getPeriodRange(period) {
+  const now = new Date();
+
+  if (period === "this_week") {
+    return {
+      start: startOfWeek(now),
+      end: now,
+    };
+  }
+
+  if (period === "last_week") {
+    const startOfThisWeek =
+      startOfWeek(now);
+
+    const start = new Date(
+      startOfThisWeek
+    );
+    start.setDate(
+      start.getDate() - 7
+    );
+
+    const end = new Date(
+      startOfThisWeek.getTime() - 1
+    );
+
+    return { start, end };
+  }
+
+  if (period === "this_month") {
+    return {
+      start: new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1
+      ),
+      end: now,
+    };
+  }
+
+  if (period === "last_month") {
+    const start = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1
+    );
+
+    const end = new Date(
+      new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1
+      ).getTime() - 1
+    );
+
+    return { start, end };
+  }
+
+  if (period === "this_year") {
+    return {
+      start: new Date(
+        now.getFullYear(),
+        0,
+        1
+      ),
+      end: now,
+    };
+  }
+
+  if (period === "last_year") {
+    const start = new Date(
+      now.getFullYear() - 1,
+      0,
+      1
+    );
+
+    const end = new Date(
+      new Date(
+        now.getFullYear(),
+        0,
+        1
+      ).getTime() - 1
+    );
+
+    return { start, end };
+  }
+
+  return null;
+}
+
+function isTradeWithinPeriod(
+  trade,
+  period
+) {
+  const range = getPeriodRange(period);
+
+  if (!range) {
+    return true;
+  }
+
+  const closedDateValue =
+    trade.closedAt || trade.updatedAt;
+
+  if (!closedDateValue) {
+    return false;
+  }
+
+  const closedDate = new Date(
+    closedDateValue
+  );
+
+  return (
+    closedDate >= range.start &&
+    closedDate <= range.end
+  );
+}
+
 function getTradeResult(
   profitLoss
 ) {
@@ -121,6 +267,11 @@ function History() {
   const [
     filter,
     setFilter,
+  ] = useState("all");
+
+  const [
+    periodFilter,
+    setPeriodFilter,
   ] = useState("all");
 
   const [
@@ -196,6 +347,24 @@ function History() {
             ? data.trades
             : []
         );
+
+        const autoClosedTrades =
+          Array.isArray(
+            data.automaticallyClosedTrades
+          )
+            ? data.automaticallyClosedTrades
+            : [];
+
+        autoClosedTrades.forEach(
+          (trade) => {
+            window.dispatchEvent(
+              new CustomEvent(
+                "tradesphere-trade-closed",
+                { detail: { trade } }
+              )
+            );
+          }
+        );
       } catch (error) {
         console.error(
           "Trade history error:",
@@ -214,23 +383,36 @@ function History() {
     loadTradeHistory();
   }, [navigate]);
 
+  const periodFilteredTrades =
+    useMemo(() => {
+      return trades.filter((trade) =>
+        isTradeWithinPeriod(
+          trade,
+          periodFilter
+        )
+      );
+    }, [
+      trades,
+      periodFilter,
+    ]);
+
   const filteredTrades =
     useMemo(() => {
       if (filter === "all") {
-        return trades;
+        return periodFilteredTrades;
       }
 
       if (
         filter === "buy" ||
         filter === "sell"
       ) {
-        return trades.filter(
+        return periodFilteredTrades.filter(
           (trade) =>
             trade.side === filter
         );
       }
 
-      return trades.filter(
+      return periodFilteredTrades.filter(
         (trade) =>
           getTradeResult(
             trade.profitLoss
@@ -238,12 +420,12 @@ function History() {
       );
     }, [
       filter,
-      trades,
+      periodFilteredTrades,
     ]);
 
   const totalProfitLoss =
     useMemo(() => {
-      return trades.reduce(
+      return periodFilteredTrades.reduce(
         (total, trade) =>
           total +
           Number(
@@ -251,57 +433,63 @@ function History() {
           ),
         0
       );
-    }, [trades]);
+    }, [periodFilteredTrades]);
 
   const profitableTrades =
     useMemo(() => {
-      return trades.filter(
+      return periodFilteredTrades.filter(
         (trade) =>
           Number(
             trade.profitLoss || 0
           ) > 0
       ).length;
-    }, [trades]);
+    }, [periodFilteredTrades]);
 
   const losingTrades =
     useMemo(() => {
-      return trades.filter(
+      return periodFilteredTrades.filter(
         (trade) =>
           Number(
             trade.profitLoss || 0
           ) < 0
       ).length;
-    }, [trades]);
+    }, [periodFilteredTrades]);
 
   const breakEvenTrades =
     useMemo(() => {
-      return trades.filter(
+      return periodFilteredTrades.filter(
         (trade) =>
           Number(
             trade.profitLoss || 0
           ) === 0
       ).length;
-    }, [trades]);
+    }, [periodFilteredTrades]);
 
   const manuallyClosedTrades =
     useMemo(() => {
-      return trades.filter(
+      return periodFilteredTrades.filter(
         (trade) =>
           trade.closeReason ===
           "manual"
       ).length;
-    }, [trades]);
+    }, [periodFilteredTrades]);
 
   const winRate =
-    trades.length > 0
+    periodFilteredTrades.length > 0
       ? Number(
           (
             (profitableTrades /
-              trades.length) *
+              periodFilteredTrades.length) *
             100
           ).toFixed(2)
         )
       : 0;
+
+  const activePeriodLabel =
+    periodOptions.find(
+      (option) =>
+        option.value === periodFilter
+    )?.label || "All Time";
 
   return (
     <div className="history-page">
@@ -342,6 +530,44 @@ function History() {
           </p>
         )}
 
+        <section className="history-panel history-period-panel">
+          <div className="history-panel-heading">
+            <div>
+              <span className="eyebrow">
+                TIME PERIOD
+              </span>
+
+              <h2>
+                Filter by date range
+              </h2>
+            </div>
+
+            <div className="history-filter-buttons">
+              {periodOptions.map(
+                (option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={
+                      periodFilter ===
+                      option.value
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setPeriodFilter(
+                        option.value
+                      )
+                    }
+                  >
+                    {option.label}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        </section>
+
         <section className="history-summary-grid">
           <article className="history-summary-card">
             <span>
@@ -349,11 +575,13 @@ function History() {
             </span>
 
             <strong>
-              {trades.length}
+              {periodFilteredTrades.length}
             </strong>
 
             <small>
-              All closed positions
+              {periodFilter === "all"
+                ? "All closed positions"
+                : `Closed · ${activePeriodLabel}`}
             </small>
           </article>
 
@@ -391,7 +619,8 @@ function History() {
             </span>
 
             <strong>
-              {trades.length > 0
+              {periodFilteredTrades.length >
+              0
                 ? `${winRate}%`
                 : "—"}
             </strong>
@@ -468,6 +697,12 @@ function History() {
               <h2>
                 Recent activity
               </h2>
+
+              {periodFilter !== "all" && (
+                <small className="history-active-period">
+                  Showing {activePeriodLabel}
+                </small>
+              )}
             </div>
 
             <div className="history-filter-buttons">
@@ -741,9 +976,9 @@ function History() {
                 </h3>
 
                 <p>
-                  There are no closed
-                  positions matching this
-                  filter.
+                  {periodFilter === "all"
+                    ? "There are no closed positions matching this filter."
+                    : `There are no closed positions matching this filter for ${activePeriodLabel.toLowerCase()}.`}
                 </p>
               </div>
             )}
