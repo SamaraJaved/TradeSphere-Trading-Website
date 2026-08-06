@@ -29,6 +29,13 @@ function Profile() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  const [tradeConfirmations, setTradeConfirmations] =
+    useState({
+      openTrade: true,
+      closeTrade: true,
+      riskEdit: true,
+    });
+
   useEffect(() => {
     async function fetchProfile() {
       const token = localStorage.getItem("token");
@@ -94,6 +101,50 @@ function Profile() {
 
     fetchProfile();
   }, [navigate]);
+
+  useEffect(() => {
+    setTradeConfirmations({
+      openTrade:
+        localStorage.getItem(
+          "tradesphere_skip_open_confirm"
+        ) !== "true",
+
+      closeTrade:
+        localStorage.getItem(
+          "tradesphere_skip_close_confirm"
+        ) !== "true",
+
+      riskEdit:
+        localStorage.getItem(
+          "tradesphere_skip_riskedit_confirm"
+        ) !== "true",
+    });
+  }, []);
+
+  function toggleTradeConfirmation(
+    key,
+    storageKey
+  ) {
+    setTradeConfirmations((previous) => {
+      const nextEnabled = !previous[key];
+
+      if (nextEnabled) {
+        localStorage.removeItem(
+          storageKey
+        );
+      } else {
+        localStorage.setItem(
+          storageKey,
+          "true"
+        );
+      }
+
+      return {
+        ...previous,
+        [key]: nextEnabled,
+      };
+    });
+  }
 
   function handleProfileChange(event) {
     const { name, value } = event.target;
@@ -582,6 +633,93 @@ function Profile() {
                 : "Change Password"}
             </button>
           </form>
+        </section>
+
+        <section className="profile-preferences-panel">
+          <div className="profile-panel-heading">
+            <div>
+              <span className="eyebrow">
+                TRADE SAFETY
+              </span>
+
+              <h2>Trade confirmation pop-ups</h2>
+            </div>
+          </div>
+
+          <div className="profile-preference-list">
+            <label className="profile-checkbox-row">
+              <input
+                type="checkbox"
+                checked={tradeConfirmations.openTrade}
+                onChange={() =>
+                  toggleTradeConfirmation(
+                    "openTrade",
+                    "tradesphere_skip_open_confirm"
+                  )
+                }
+              />
+
+              <div>
+                <strong>
+                  Confirm before opening a trade
+                </strong>
+
+                <span>
+                  Show a pop-up before a Buy or Sell
+                  position is placed.
+                </span>
+              </div>
+            </label>
+
+            <label className="profile-checkbox-row">
+              <input
+                type="checkbox"
+                checked={tradeConfirmations.closeTrade}
+                onChange={() =>
+                  toggleTradeConfirmation(
+                    "closeTrade",
+                    "tradesphere_skip_close_confirm"
+                  )
+                }
+              />
+
+              <div>
+                <strong>
+                  Confirm before closing a trade
+                </strong>
+
+                <span>
+                  Show a pop-up before an open position is
+                  closed.
+                </span>
+              </div>
+            </label>
+
+            <label className="profile-checkbox-row">
+              <input
+                type="checkbox"
+                checked={tradeConfirmations.riskEdit}
+                onChange={() =>
+                  toggleTradeConfirmation(
+                    "riskEdit",
+                    "tradesphere_skip_riskedit_confirm"
+                  )
+                }
+              />
+
+              <div>
+                <strong>
+                  Confirm before editing Stop Loss / Take
+                  Profit
+                </strong>
+
+                <span>
+                  Show a pop-up when changing SL or TP from
+                  the chart tool or an open position.
+                </span>
+              </div>
+            </label>
+          </div>
         </section>
 
         <section className="profile-preferences-panel">

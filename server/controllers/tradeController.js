@@ -848,6 +848,124 @@ async function closeTrade(req, res) {
 }
 
 /*
+  PATCH /api/trades/:tradeId/risk
+
+  Updates Stop Loss and/or Take Profit
+  on an already-open position.
+*/
+async function updatePositionRiskLevels(
+  req,
+  res
+) {
+  try {
+    const { tradeId } = req.params;
+    const { stopLoss, takeProfit } =
+      req.body;
+
+    const trade =
+      await Trade.findOne({
+        _id: tradeId,
+        user: req.userId,
+      });
+
+    if (!trade) {
+      return res.status(404).json({
+        message:
+          "Position was not found.",
+      });
+    }
+
+    if (
+      trade.status !== "open"
+    ) {
+      return res.status(400).json({
+        message:
+          "This position is already closed.",
+      });
+    }
+
+    const numericStopLoss =
+      parseOptionalPrice(
+        stopLoss
+      );
+
+    const numericTakeProfit =
+      parseOptionalPrice(
+        takeProfit
+      );
+
+    if (
+      Number.isNaN(
+        numericStopLoss
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Stop loss must be a valid positive price.",
+      });
+    }
+
+    if (
+      Number.isNaN(
+        numericTakeProfit
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Take profit must be a valid positive price.",
+      });
+    }
+
+    const riskValidationError =
+      validateRiskLevels({
+        side: trade.side,
+        entryPrice: Number(
+          trade.entryPrice
+        ),
+        stopLoss:
+          numericStopLoss,
+        takeProfit:
+          numericTakeProfit,
+      });
+
+    if (riskValidationError) {
+      return res.status(400).json({
+        message:
+          riskValidationError,
+      });
+    }
+
+    trade.stopLoss =
+      numericStopLoss;
+
+    trade.takeProfit =
+      numericTakeProfit;
+
+    await trade.save();
+
+    return res.status(200).json({
+      message:
+        "Stop Loss and Take Profit updated successfully.",
+
+      trade: addLivePositionValues(
+        trade
+      ),
+    });
+  } catch (error) {
+    console.error(
+      "Update position risk levels error:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        error.message ||
+        "Could not update the position.",
+    });
+  }
+}
+
+/*
   GET /api/trades/history
 
   Returns only closed positions.
@@ -1156,6 +1274,7 @@ export {
   placeTrade,
   getActiveTrades,
   closeTrade,
+  updatePositionRiskLevels,
   settleTrade,
   getTradeHistory,
   getPortfolioSummary,

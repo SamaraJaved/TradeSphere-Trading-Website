@@ -4,6 +4,7 @@ import {
   placeTrade,
   getActiveTrades,
   closeTrade,
+  updatePositionRiskLevels,
   getTradeHistory,
   getPortfolioSummary,
   settleExpiredTrades,
@@ -66,6 +67,16 @@ router.post(
   "/:tradeId/close",
   protectRoute,
   closeTrade
+);
+
+/*
+  Update Stop Loss / Take Profit on
+  an already-open position
+*/
+router.patch(
+  "/:tradeId/risk",
+  protectRoute,
+  updatePositionRiskLevels
 );
 
 export default router;

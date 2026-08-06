@@ -250,7 +250,9 @@ function Dashboard() {
   useEffect(() => {
     let stopped = false;
 
-    async function loadDashboard() {
+    async function loadDashboard(
+      showLoading
+    ) {
       const token =
         localStorage.getItem(
           "token"
@@ -262,7 +264,10 @@ function Dashboard() {
       }
 
       try {
-        setIsLoading(true);
+        if (showLoading) {
+          setIsLoading(true);
+        }
+
         setMessage("");
 
         const headers = {
@@ -411,24 +416,34 @@ function Dashboard() {
             "Could not load dashboard information."
         );
       } finally {
-        if (!stopped) {
+        if (
+          !stopped &&
+          showLoading
+        ) {
           setIsLoading(false);
         }
       }
     }
 
-    async function refreshDashboard() {
+    async function refreshDashboard(
+      showLoading
+    ) {
       await Promise.all([
-        loadDashboard(),
+        loadDashboard(
+          showLoading
+        ),
         loadMarketPrices(),
       ]);
     }
 
-    refreshDashboard();
+    refreshDashboard(true);
 
     const refreshTimer =
       setInterval(
-        refreshDashboard,
+        () =>
+          refreshDashboard(
+            false
+          ),
         5000
       );
 

@@ -56,9 +56,6 @@ function AppNavigation() {
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    localStorage.removeItem(
-      "tradesphere_demo_completed"
-    );
 
     navigate("/login");
   }

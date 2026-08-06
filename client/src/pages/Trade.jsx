@@ -480,6 +480,9 @@ function DrawingLayer({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onEdgePointerDown,
+  onEdgePointerMove,
+  onEdgePointerUp,
 }) {
   const visibleDrawings = draftDrawing
     ? [...drawings, { ...draftDrawing, id: "draft-drawing" }]
@@ -524,7 +527,9 @@ function DrawingLayer({
       }}
     >
       {visibleDrawings.map((drawing) => {
-        const isSelected = selectedDrawingId === drawing.id;
+        const isSelected =
+          selectedDrawingId === drawing.id ||
+          drawing.id === "position-edit";
         const stroke = isSelected ? "#16a34a" : "#2563eb";
         const strokeWidth = isSelected ? 3 : 2;
 
@@ -592,7 +597,7 @@ function DrawingLayer({
           const top = Math.min(drawing.start.y, drawing.end.y) * 520;
           const bottom = Math.max(drawing.start.y, drawing.end.y) * 520;
           const entry = clamp(drawing.entryY ?? 0.5) * 520;
-          const width = Math.max(right - left, 80);
+          const width = Math.max(right - left, 96);
           const side = drawing.side || (drawing.type === "risk-buy" ? "buy" : "sell");
           const topFill = side === "buy"
             ? "rgba(22, 163, 74, 0.16)"
@@ -600,6 +605,45 @@ function DrawingLayer({
           const bottomFill = side === "buy"
             ? "rgba(220, 38, 38, 0.16)"
             : "rgba(22, 163, 74, 0.16)";
+
+          const topZoneHeight = entry - top;
+          const bottomZoneHeight = bottom - entry;
+
+          const LABEL_FONT_SIZE = 9.5;
+          const LABEL_CHIP_HEIGHT = 16;
+          const LABEL_MIN_ZONE = 18;
+
+          function estimateChipWidth(text) {
+            return Math.min(
+              Math.max(text.length * 5.6 + 12, 46),
+              Math.max(width - 8, 46)
+            );
+          }
+
+          const topLabelSide = side === "buy" ? "TP" : "SL";
+          const bottomLabelSide = side === "buy" ? "SL" : "TP";
+
+          const topLabelPrice = side === "buy"
+            ? drawing.takeProfit
+            : drawing.stopLoss;
+
+          const bottomLabelPrice = side === "buy"
+            ? drawing.stopLoss
+            : drawing.takeProfit;
+
+          const topLabelText = `${topLabelSide} $${formatMoney(topLabelPrice)}`;
+          const bottomLabelText = `${bottomLabelSide} $${formatMoney(bottomLabelPrice)}`;
+          const entryLabelText = `ENTRY $${formatMoney(drawing.entryPrice)}`;
+
+          const topLabelColor = side === "buy" ? "#166534" : "#991b1b";
+          const bottomLabelColor = side === "buy" ? "#991b1b" : "#166534";
+
+          const topLabelY = top + topZoneHeight / 2;
+          const bottomLabelY = entry + bottomZoneHeight / 2;
+
+          const topLabelWidth = estimateChipWidth(topLabelText);
+          const bottomLabelWidth = estimateChipWidth(bottomLabelText);
+          const entryLabelWidth = estimateChipWidth(entryLabelText);
 
           return (
             <g
@@ -646,39 +690,175 @@ function DrawingLayer({
                 vectorEffect="non-scaling-stroke"
               />
 
-              <text
-                x={left + 8}
-                y={Math.max(top + 17, entry - 8)}
-                fill={side === "buy" ? "#166534" : "#991b1b"}
-                fontSize="12"
-                fontWeight="800"
-              >
-                {side === "buy" ? "TP" : "SL"} ${formatMoney(
-                  side === "buy" ? drawing.takeProfit : drawing.stopLoss
-                )}
-              </text>
+              {topZoneHeight >= LABEL_MIN_ZONE && (
+                <g>
+                  <rect
+                    x={left + 4}
+                    y={
+                      topLabelY -
+                      LABEL_CHIP_HEIGHT / 2
+                    }
+                    width={topLabelWidth}
+                    height={LABEL_CHIP_HEIGHT}
+                    rx={3}
+                    fill="#ffffff"
+                    stroke={topLabelColor}
+                    strokeWidth={1}
+                  />
 
-              <text
-                x={left + 8}
-                y={entry - 6}
-                fill="#0f172a"
-                fontSize="12"
-                fontWeight="800"
-              >
-                ENTRY ${formatMoney(drawing.entryPrice)}
-              </text>
+                  <text
+                    x={
+                      left +
+                      4 +
+                      topLabelWidth / 2
+                    }
+                    y={
+                      topLabelY +
+                      LABEL_FONT_SIZE * 0.33
+                    }
+                    fill={topLabelColor}
+                    fontSize={LABEL_FONT_SIZE}
+                    fontWeight="800"
+                    textAnchor="middle"
+                  >
+                    {topLabelText}
+                  </text>
+                </g>
+              )}
 
-              <text
-                x={left + 8}
-                y={Math.min(bottom - 7, entry + 18)}
-                fill={side === "buy" ? "#991b1b" : "#166534"}
-                fontSize="12"
-                fontWeight="800"
-              >
-                {side === "buy" ? "SL" : "TP"} ${formatMoney(
-                  side === "buy" ? drawing.stopLoss : drawing.takeProfit
+              <g>
+                <rect
+                  x={left + 4}
+                  y={
+                    entry -
+                    LABEL_CHIP_HEIGHT / 2
+                  }
+                  width={entryLabelWidth}
+                  height={LABEL_CHIP_HEIGHT}
+                  rx={3}
+                  fill="#0f172a"
+                  stroke="#0f172a"
+                  strokeWidth={1}
+                />
+
+                <text
+                  x={
+                    left +
+                    4 +
+                    entryLabelWidth / 2
+                  }
+                  y={
+                    entry +
+                    LABEL_FONT_SIZE * 0.33
+                  }
+                  fill="#ffffff"
+                  fontSize={LABEL_FONT_SIZE}
+                  fontWeight="800"
+                  textAnchor="middle"
+                >
+                  {entryLabelText}
+                </text>
+              </g>
+
+              {bottomZoneHeight >= LABEL_MIN_ZONE && (
+                <g>
+                  <rect
+                    x={left + 4}
+                    y={
+                      bottomLabelY -
+                      LABEL_CHIP_HEIGHT / 2
+                    }
+                    width={bottomLabelWidth}
+                    height={LABEL_CHIP_HEIGHT}
+                    rx={3}
+                    fill="#ffffff"
+                    stroke={bottomLabelColor}
+                    strokeWidth={1}
+                  />
+
+                  <text
+                    x={
+                      left +
+                      4 +
+                      bottomLabelWidth / 2
+                    }
+                    y={
+                      bottomLabelY +
+                      LABEL_FONT_SIZE * 0.33
+                    }
+                    fill={bottomLabelColor}
+                    fontSize={LABEL_FONT_SIZE}
+                    fontWeight="800"
+                    textAnchor="middle"
+                  >
+                    {bottomLabelText}
+                  </text>
+                </g>
+              )}
+
+              {isSelected &&
+                activeTool === "pointer" &&
+                drawing.id !== "draft-drawing" && (
+                  <>
+                    <line
+                      x1={left}
+                      x2={left + width}
+                      y1={top}
+                      y2={top}
+                      stroke="transparent"
+                      strokeWidth={16}
+                      pointerEvents="stroke"
+                      style={{ cursor: "ns-resize" }}
+                      onPointerDown={(event) =>
+                        onEdgePointerDown(event, drawing, "top")
+                      }
+                      onPointerMove={onEdgePointerMove}
+                      onPointerUp={onEdgePointerUp}
+                      onPointerCancel={onEdgePointerUp}
+                    />
+
+                    <rect
+                      x={left + width / 2 - 14}
+                      y={top - 5}
+                      width={28}
+                      height={10}
+                      rx={5}
+                      fill="#ffffff"
+                      stroke={side === "buy" ? "#16a34a" : "#dc2626"}
+                      strokeWidth={1.5}
+                      pointerEvents="none"
+                    />
+
+                    <line
+                      x1={left}
+                      x2={left + width}
+                      y1={bottom}
+                      y2={bottom}
+                      stroke="transparent"
+                      strokeWidth={16}
+                      pointerEvents="stroke"
+                      style={{ cursor: "ns-resize" }}
+                      onPointerDown={(event) =>
+                        onEdgePointerDown(event, drawing, "bottom")
+                      }
+                      onPointerMove={onEdgePointerMove}
+                      onPointerUp={onEdgePointerUp}
+                      onPointerCancel={onEdgePointerUp}
+                    />
+
+                    <rect
+                      x={left + width / 2 - 14}
+                      y={bottom - 5}
+                      width={28}
+                      height={10}
+                      rx={5}
+                      fill="#ffffff"
+                      stroke={side === "buy" ? "#dc2626" : "#16a34a"}
+                      strokeWidth={1.5}
+                      pointerEvents="none"
+                    />
+                  </>
                 )}
-              </text>
             </g>
           );
         }
@@ -774,6 +954,9 @@ function TradingChart({
   setTakeProfit,
   openPositions,
   clearRiskSetupSignal,
+  requestConfirmation,
+  editingPosition,
+  onPositionRiskEdit,
 }) {
   const chartContainerRef =
     useRef(null);
@@ -822,6 +1005,12 @@ function TradingChart({
   const [isCalculatorOpen, setIsCalculatorOpen] =
     useState(false);
 
+  const [edgeDrag, setEdgeDrag] =
+    useState(null);
+
+  const [positionEditDrawing, setPositionEditDrawing] =
+    useState(null);
+
   const storageKey =
     `tradesphere-drawings-${selectedAsset.productId}`;
 
@@ -855,6 +1044,154 @@ function TradingChart({
   useEffect(() => {
     chartTypeRef.current = chartType;
   }, [chartType]);
+
+  useEffect(() => {
+    if (!editingPosition) {
+      setPositionEditDrawing(null);
+      return;
+    }
+
+    const activeSeries =
+      chartTypeRef.current === "line"
+        ? lineSeriesRef.current
+        : candleSeriesRef.current;
+
+    const container =
+      chartContainerRef.current;
+
+    if (!activeSeries || !container) {
+      setPositionEditDrawing(null);
+      return;
+    }
+
+    const bounds =
+      container.getBoundingClientRect();
+
+    if (!bounds.height) {
+      setPositionEditDrawing(null);
+      return;
+    }
+
+    const side = editingPosition.side;
+    const entryPrice = Number(
+      editingPosition.entryPrice
+    );
+
+    const fallbackOffset =
+      entryPrice * 0.01;
+
+    const storedStopLoss = Number(
+      editingPosition.stopLoss
+    );
+
+    const storedTakeProfit = Number(
+      editingPosition.takeProfit
+    );
+
+    const stopLossPrice =
+      Number.isFinite(storedStopLoss) &&
+      storedStopLoss > 0
+        ? storedStopLoss
+        : side === "buy"
+          ? entryPrice - fallbackOffset
+          : entryPrice + fallbackOffset;
+
+    const takeProfitPrice =
+      Number.isFinite(
+        storedTakeProfit
+      ) && storedTakeProfit > 0
+        ? storedTakeProfit
+        : side === "buy"
+          ? entryPrice + fallbackOffset
+          : entryPrice - fallbackOffset;
+
+    const entryCoordinate =
+      activeSeries.priceToCoordinate(
+        entryPrice
+      );
+
+    const stopLossCoordinate =
+      activeSeries.priceToCoordinate(
+        stopLossPrice
+      );
+
+    const takeProfitCoordinate =
+      activeSeries.priceToCoordinate(
+        takeProfitPrice
+      );
+
+    if (
+      !Number.isFinite(
+        entryCoordinate
+      ) ||
+      !Number.isFinite(
+        stopLossCoordinate
+      ) ||
+      !Number.isFinite(
+        takeProfitCoordinate
+      )
+    ) {
+      setPositionEditDrawing(null);
+      return;
+    }
+
+    const topCoordinate =
+      side === "buy"
+        ? takeProfitCoordinate
+        : stopLossCoordinate;
+
+    const bottomCoordinate =
+      side === "buy"
+        ? stopLossCoordinate
+        : takeProfitCoordinate;
+
+    setPositionEditDrawing({
+      id: "position-edit",
+      type:
+        side === "buy"
+          ? "risk-buy"
+          : "risk-sell",
+      side,
+      start: {
+        x: 0.15,
+        y: clamp(
+          topCoordinate / bounds.height
+        ),
+      },
+      end: {
+        x: 0.85,
+        y: clamp(
+          bottomCoordinate /
+            bounds.height
+        ),
+      },
+      entryY: clamp(
+        entryCoordinate / bounds.height
+      ),
+      entryPrice,
+      stopLoss:
+        editingPosition.stopLoss ??
+        null,
+      takeProfit:
+        editingPosition.takeProfit ??
+        null,
+      quantity:
+        editingPosition.quantity,
+    });
+  }, [
+    editingPosition?._id,
+    editingPosition?.stopLoss,
+    editingPosition?.takeProfit,
+    editingPosition?.entryPrice,
+    editingPosition?.side,
+    candles.length,
+  ]);
+
+  useEffect(() => {
+    if (editingPosition?._id) {
+      setActiveTool("pointer");
+    }
+  }, [editingPosition?._id]);
 
   useEffect(() => {
     try {
@@ -1905,6 +2242,390 @@ function TradingChart({
     setActiveTool("pointer");
   }
 
+  const combinedDrawings = positionEditDrawing
+    ? [...drawings, positionEditDrawing]
+    : drawings;
+
+  function handleEdgePointerDown(
+    event,
+    drawing,
+    edge
+  ) {
+    event.stopPropagation();
+
+    const container =
+      chartContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const bounds =
+      container.getBoundingClientRect();
+
+    const entryChartY =
+      (drawing.entryY ?? 0.5) *
+      bounds.height;
+
+    const rawChartY = clamp(
+      event.clientY - bounds.top,
+      0,
+      bounds.height
+    );
+
+    const chartY =
+      edge === "top"
+        ? Math.min(
+            rawChartY,
+            entryChartY - 4
+          )
+        : Math.max(
+            rawChartY,
+            entryChartY + 4
+          );
+
+    setEdgeDrag({
+      drawingId: drawing.id,
+      edge,
+      pointerId: event.pointerId,
+      chartY,
+      boundsHeight: bounds.height,
+      entryChartY,
+    });
+
+    event.currentTarget.setPointerCapture(
+      event.pointerId
+    );
+
+    event.preventDefault();
+  }
+
+  function handleEdgePointerMove(event) {
+    if (
+      !edgeDrag ||
+      event.pointerId !== edgeDrag.pointerId
+    ) {
+      return;
+    }
+
+    const container =
+      chartContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const bounds =
+      container.getBoundingClientRect();
+
+    const rawChartY = clamp(
+      event.clientY - bounds.top,
+      0,
+      bounds.height
+    );
+
+    const chartY =
+      edgeDrag.edge === "top"
+        ? Math.min(
+            rawChartY,
+            edgeDrag.entryChartY - 4
+          )
+        : Math.max(
+            rawChartY,
+            edgeDrag.entryChartY + 4
+          );
+
+    setEdgeDrag((previous) =>
+      previous
+        ? {
+            ...previous,
+            chartY,
+            boundsHeight: bounds.height,
+          }
+        : previous
+    );
+
+    event.preventDefault();
+  }
+
+  function handleEdgePointerUp(event) {
+    if (
+      !edgeDrag ||
+      event.pointerId !== edgeDrag.pointerId
+    ) {
+      return;
+    }
+
+    if (
+      event.currentTarget.hasPointerCapture(
+        event.pointerId
+      )
+    ) {
+      event.currentTarget.releasePointerCapture(
+        event.pointerId
+      );
+    }
+
+    const drawing = combinedDrawings.find(
+      (item) =>
+        item.id === edgeDrag.drawingId
+    );
+
+    const activeSeries =
+      chartTypeRef.current === "line"
+        ? lineSeriesRef.current
+        : candleSeriesRef.current;
+
+    const finalPrice = activeSeries
+      ? Number(
+          activeSeries.coordinateToPrice(
+            edgeDrag.chartY
+          )
+        )
+      : null;
+
+    const boundsHeight =
+      edgeDrag.boundsHeight;
+
+    const chartY = edgeDrag.chartY;
+    const edge = edgeDrag.edge;
+
+    setEdgeDrag(null);
+
+    if (
+      !drawing ||
+      !Number.isFinite(finalPrice) ||
+      finalPrice <= 0 ||
+      !boundsHeight
+    ) {
+      return;
+    }
+
+    const precision =
+      selectedAsset.pricePrecision || 2;
+
+    const roundedPrice = Number(
+      finalPrice.toFixed(precision)
+    );
+
+    const isTakeProfit =
+      (edge === "top") ===
+      (drawing.side === "buy");
+
+    if (edgeDrag.drawingId === "position-edit") {
+      if (!editingPosition) {
+        return;
+      }
+
+      const currentStopLossValue =
+        editingPosition.stopLoss
+          ? String(editingPosition.stopLoss)
+          : "";
+
+      const currentTakeProfitValue =
+        editingPosition.takeProfit
+          ? String(
+              editingPosition.takeProfit
+            )
+          : "";
+
+      onPositionRiskEdit(
+        isTakeProfit
+          ? currentStopLossValue
+          : String(roundedPrice),
+        isTakeProfit
+          ? String(roundedPrice)
+          : currentTakeProfitValue
+      );
+
+      return;
+    }
+
+    const normalizedY = clamp(
+      chartY / boundsHeight
+    );
+
+    function applyEdit() {
+      setDrawings((previousDrawings) =>
+        previousDrawings.map((item) => {
+          if (item.id !== drawing.id) {
+            return item;
+          }
+
+          const startIsTop =
+            item.start.y <= item.end.y;
+
+          const positioned =
+            edge === "top"
+              ? startIsTop
+                ? {
+                    ...item,
+                    start: {
+                      ...item.start,
+                      y: normalizedY,
+                    },
+                  }
+                : {
+                    ...item,
+                    end: {
+                      ...item.end,
+                      y: normalizedY,
+                    },
+                  }
+              : startIsTop
+                ? {
+                    ...item,
+                    end: {
+                      ...item.end,
+                      y: normalizedY,
+                    },
+                  }
+                : {
+                    ...item,
+                    start: {
+                      ...item.start,
+                      y: normalizedY,
+                    },
+                  };
+
+          return {
+            ...positioned,
+            stopLoss: isTakeProfit
+              ? item.stopLoss
+              : roundedPrice,
+            takeProfit: isTakeProfit
+              ? roundedPrice
+              : item.takeProfit,
+          };
+        })
+      );
+
+      if (isTakeProfit) {
+        setTakeProfit(
+          roundedPrice.toFixed(precision)
+        );
+      } else {
+        setStopLoss(
+          roundedPrice.toFixed(precision)
+        );
+      }
+    }
+
+    requestConfirmation(
+      {
+        side: drawing.side,
+        asset: selectedAsset,
+        changes: [
+          {
+            label: isTakeProfit
+              ? "Take Profit"
+              : "Stop Loss",
+            oldPrice: isTakeProfit
+              ? drawing.takeProfit
+              : drawing.stopLoss,
+            newPrice: roundedPrice,
+          },
+        ],
+      },
+      applyEdit
+    );
+  }
+
+  const drawingsForDisplay = !edgeDrag
+    ? combinedDrawings
+    : combinedDrawings.map((drawing) => {
+        if (
+          drawing.id !==
+            edgeDrag.drawingId ||
+          !edgeDrag.boundsHeight
+        ) {
+          return drawing;
+        }
+
+        const startIsTop =
+          drawing.start.y <=
+          drawing.end.y;
+
+        const normalizedY = clamp(
+          edgeDrag.chartY /
+            edgeDrag.boundsHeight
+        );
+
+        const positioned =
+          edgeDrag.edge === "top"
+            ? startIsTop
+              ? {
+                  ...drawing,
+                  start: {
+                    ...drawing.start,
+                    y: normalizedY,
+                  },
+                }
+              : {
+                  ...drawing,
+                  end: {
+                    ...drawing.end,
+                    y: normalizedY,
+                  },
+                }
+            : startIsTop
+              ? {
+                  ...drawing,
+                  end: {
+                    ...drawing.end,
+                    y: normalizedY,
+                  },
+                }
+              : {
+                  ...drawing,
+                  start: {
+                    ...drawing.start,
+                    y: normalizedY,
+                  },
+                };
+
+        const activeSeries =
+          chartTypeRef.current === "line"
+            ? lineSeriesRef.current
+            : candleSeriesRef.current;
+
+        const livePrice = activeSeries
+          ? Number(
+              activeSeries.coordinateToPrice(
+                edgeDrag.chartY
+              )
+            )
+          : null;
+
+        const isTakeProfit =
+          (edgeDrag.edge === "top") ===
+          (drawing.side === "buy");
+
+        if (!Number.isFinite(livePrice)) {
+          return positioned;
+        }
+
+        return {
+          ...positioned,
+          stopLoss: isTakeProfit
+            ? positioned.stopLoss
+            : livePrice,
+          takeProfit: isTakeProfit
+            ? livePrice
+            : positioned.takeProfit,
+        };
+      });
+
+  const selectedRiskDrawing =
+    positionEditDrawing ||
+    drawings.find(
+      (drawing) =>
+        drawing.id ===
+          selectedDrawingId &&
+        (drawing.type === "risk-buy" ||
+          drawing.type === "risk-sell")
+    );
+
   const isNativeRiskToolActive =
     activeTool === "risk-buy" ||
     activeTool === "risk-sell";
@@ -1966,7 +2687,7 @@ function TradingChart({
         onClick={handleTextPlacement}
       >
         <DrawingLayer
-          drawings={drawings}
+          drawings={drawingsForDisplay}
           draftDrawing={draftDrawing}
           activeTool={activeTool}
           selectedDrawingId={selectedDrawingId}
@@ -1974,11 +2695,19 @@ function TradingChart({
           onPointerDown={handleDrawingPointerDown}
           onPointerMove={handleDrawingPointerMove}
           onPointerUp={handleDrawingPointerUp}
+          onEdgePointerDown={handleEdgePointerDown}
+          onEdgePointerMove={handleEdgePointerMove}
+          onEdgePointerUp={handleEdgePointerUp}
         />
       </div>
 
       <div className="drawing-tool-hint">
         {activeTool === "pointer" &&
+          selectedRiskDrawing &&
+          "Drag the top or bottom edge of the rectangle to adjust Take Profit and Stop Loss."}
+
+        {activeTool === "pointer" &&
+          !selectedRiskDrawing &&
           "Select drawings or use the chart normally."}
 
         {activeTool === "risk-buy" &&
@@ -2027,6 +2756,18 @@ function Trade() {
   const [isLoadingCandles, setIsLoadingCandles] = useState(true);
   const [isOpeningPosition, setIsOpeningPosition] = useState(false);
   const [closingTradeId, setClosingTradeId] = useState("");
+
+  const [editingPositionId, setEditingPositionId] =
+    useState("");
+
+  const [positionEditValues, setPositionEditValues] =
+    useState({ stopLoss: "", takeProfit: "" });
+
+  const [positionEditError, setPositionEditError] =
+    useState("");
+
+  const [isSavingPositionEdit, setIsSavingPositionEdit] =
+    useState(false);
   const [marketData, setMarketData] = useState(null);
   const [candles, setCandles] = useState([]);
   const [marketError, setMarketError] = useState("");
@@ -2035,6 +2776,12 @@ function Trade() {
     clearRiskSetupSignal,
     setClearRiskSetupSignal,
   ] = useState(0);
+
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState(null);
+
+  const [skipConfirmChecked, setSkipConfirmChecked] =
+    useState(false);
 
   const historicalCandlesReadyRef = useRef(false);
 
@@ -2065,6 +2812,12 @@ function Trade() {
       ),
     [openPositions, selectedAsset.symbol]
   );
+
+  const editingPosition =
+    selectedAssetPositions.find(
+      (position) =>
+        position._id === editingPositionId
+    ) || null;
 
   function clearSessionAndRedirect() {
     localStorage.removeItem("token");
@@ -2300,6 +3053,11 @@ function Trade() {
   }, [symbol, timeframe]);
 
   useEffect(() => {
+    setEditingPositionId("");
+    setPositionEditError("");
+  }, [symbol]);
+
+  useEffect(() => {
     let stopped = false;
 
     async function refreshLiveMarket() {
@@ -2395,6 +3153,116 @@ function Trade() {
     }
 
     return "";
+  }
+
+  function requestOpenPosition(side) {
+    const validationMessage = validateOrder(side);
+
+    if (validationMessage) {
+      setTradeResult(validationMessage);
+      setTradeResultType("error");
+      return;
+    }
+
+    if (
+      localStorage.getItem(
+        "tradesphere_skip_open_confirm"
+      ) === "true"
+    ) {
+      openPosition(side);
+      return;
+    }
+
+    setSkipConfirmChecked(false);
+    setPendingConfirmation({
+      type: "open",
+      side,
+    });
+  }
+
+  function requestClosePosition(position) {
+    if (
+      localStorage.getItem(
+        "tradesphere_skip_close_confirm"
+      ) === "true"
+    ) {
+      closePosition(position._id);
+      return;
+    }
+
+    setSkipConfirmChecked(false);
+    setPendingConfirmation({
+      type: "close",
+      position,
+    });
+  }
+
+  function requestRiskEditConfirmation(
+    details,
+    applyEdit
+  ) {
+    if (
+      localStorage.getItem(
+        "tradesphere_skip_riskedit_confirm"
+      ) === "true"
+    ) {
+      applyEdit();
+      return;
+    }
+
+    setSkipConfirmChecked(false);
+    setPendingConfirmation({
+      type: "riskEdit",
+      onConfirm: applyEdit,
+      ...details,
+    });
+  }
+
+  function confirmPendingAction() {
+    if (!pendingConfirmation) {
+      return;
+    }
+
+    if (pendingConfirmation.type === "open") {
+      if (skipConfirmChecked) {
+        localStorage.setItem(
+          "tradesphere_skip_open_confirm",
+          "true"
+        );
+      }
+
+      openPosition(pendingConfirmation.side);
+    }
+
+    if (pendingConfirmation.type === "close") {
+      if (skipConfirmChecked) {
+        localStorage.setItem(
+          "tradesphere_skip_close_confirm",
+          "true"
+        );
+      }
+
+      closePosition(
+        pendingConfirmation.position._id
+      );
+    }
+
+    if (pendingConfirmation.type === "riskEdit") {
+      if (skipConfirmChecked) {
+        localStorage.setItem(
+          "tradesphere_skip_riskedit_confirm",
+          "true"
+        );
+      }
+
+      pendingConfirmation.onConfirm();
+    }
+
+    setPendingConfirmation(null);
+  }
+
+  function cancelPendingAction() {
+    setPendingConfirmation(null);
   }
 
   async function openPosition(side) {
@@ -2528,6 +3396,270 @@ function Trade() {
     } finally {
       setClosingTradeId("");
     }
+  }
+
+  function openPositionEdit(position) {
+    setEditingPositionId(
+      (previousId) =>
+        previousId === position._id
+          ? ""
+          : position._id
+    );
+
+    setPositionEditValues({
+      stopLoss: position.stopLoss
+        ? String(position.stopLoss)
+        : "",
+      takeProfit: position.takeProfit
+        ? String(position.takeProfit)
+        : "",
+    });
+
+    setPositionEditError("");
+  }
+
+  function closePositionEdit() {
+    setEditingPositionId("");
+    setPositionEditError("");
+  }
+
+  function validatePositionRiskLevels(
+    position,
+    stopLossValue,
+    takeProfitValue
+  ) {
+    const numericStopLoss =
+      stopLossValue === ""
+        ? null
+        : Number(stopLossValue);
+
+    const numericTakeProfit =
+      takeProfitValue === ""
+        ? null
+        : Number(takeProfitValue);
+
+    if (
+      numericStopLoss !== null &&
+      (!Number.isFinite(numericStopLoss) ||
+        numericStopLoss <= 0)
+    ) {
+      return "Stop Loss must be a valid positive price.";
+    }
+
+    if (
+      numericTakeProfit !== null &&
+      (!Number.isFinite(
+        numericTakeProfit
+      ) ||
+        numericTakeProfit <= 0)
+    ) {
+      return "Take Profit must be a valid positive price.";
+    }
+
+    const entryPrice = Number(
+      position.entryPrice
+    );
+
+    if (position.side === "buy") {
+      if (
+        numericStopLoss !== null &&
+        numericStopLoss >= entryPrice
+      ) {
+        return "For a Buy position, Stop Loss must be below the entry price.";
+      }
+
+      if (
+        numericTakeProfit !== null &&
+        numericTakeProfit <= entryPrice
+      ) {
+        return "For a Buy position, Take Profit must be above the entry price.";
+      }
+    }
+
+    if (position.side === "sell") {
+      if (
+        numericStopLoss !== null &&
+        numericStopLoss <= entryPrice
+      ) {
+        return "For a Sell position, Stop Loss must be above the entry price.";
+      }
+
+      if (
+        numericTakeProfit !== null &&
+        numericTakeProfit >= entryPrice
+      ) {
+        return "For a Sell position, Take Profit must be below the entry price.";
+      }
+    }
+
+    return "";
+  }
+
+  async function savePositionRiskLevels(
+    tradeId,
+    stopLoss,
+    takeProfit
+  ) {
+    const token =
+      localStorage.getItem("token");
+
+    if (!token) {
+      clearSessionAndRedirect();
+      return;
+    }
+
+    try {
+      setIsSavingPositionEdit(true);
+
+      const response = await fetch(
+        `${API_URL}/api/trades/${tradeId}/risk`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            stopLoss,
+            takeProfit,
+          }),
+        }
+      );
+
+      const data = await readJson(
+        response
+      );
+
+      if (response.status === 401) {
+        clearSessionAndRedirect();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Could not update the position."
+        );
+      }
+
+      setTradeResult(
+        "Stop Loss and Take Profit updated successfully."
+      );
+      setTradeResultType("success");
+
+      closePositionEdit();
+
+      await loadOpenPositions({
+        silent: true,
+      });
+    } catch (error) {
+      console.error(
+        "Update position risk levels error:",
+        error
+      );
+
+      setPositionEditError(
+        error.message ||
+          "Could not update the position."
+      );
+    } finally {
+      setIsSavingPositionEdit(false);
+    }
+  }
+
+  function requestPositionRiskEdit(
+    position,
+    stopLossValue,
+    takeProfitValue
+  ) {
+    setPositionEditError("");
+
+    const validationMessage =
+      validatePositionRiskLevels(
+        position,
+        stopLossValue,
+        takeProfitValue
+      );
+
+    if (validationMessage) {
+      setPositionEditError(
+        validationMessage
+      );
+      return;
+    }
+
+    const numericStopLoss =
+      stopLossValue === ""
+        ? null
+        : Number(stopLossValue);
+
+    const numericTakeProfit =
+      takeProfitValue === ""
+        ? null
+        : Number(takeProfitValue);
+
+    const changes = [];
+
+    if (
+      numericStopLoss !==
+      (position.stopLoss ?? null)
+    ) {
+      changes.push({
+        label: "Stop Loss",
+        oldPrice: position.stopLoss,
+        newPrice: numericStopLoss,
+      });
+    }
+
+    if (
+      numericTakeProfit !==
+      (position.takeProfit ?? null)
+    ) {
+      changes.push({
+        label: "Take Profit",
+        oldPrice: position.takeProfit,
+        newPrice: numericTakeProfit,
+      });
+    }
+
+    if (changes.length === 0) {
+      closePositionEdit();
+      return;
+    }
+
+    const applyEdit = () =>
+      savePositionRiskLevels(
+        position._id,
+        numericStopLoss,
+        numericTakeProfit
+      );
+
+    requestRiskEditConfirmation(
+      {
+        side: position.side,
+        asset: {
+          pair: `${position.asset}/USD`,
+        },
+        changes,
+      },
+      applyEdit
+    );
+  }
+
+  function requestPositionRiskEditFromChart(
+    stopLossValue,
+    takeProfitValue
+  ) {
+    if (!editingPosition) {
+      return;
+    }
+
+    requestPositionRiskEdit(
+      editingPosition,
+      stopLossValue,
+      takeProfitValue
+    );
   }
 
   const orderControlsDisabled =
@@ -3092,6 +4224,16 @@ function Trade() {
           border: 1px solid #e2e8f0;
           border-radius: 9px;
           background: #f8fafc;
+          cursor: pointer;
+        }
+
+        .position-card:hover {
+          border-color: #cbd5e1;
+        }
+
+        .position-card.editing {
+          border-color: #16a34a;
+          background: #f0fdf4;
         }
 
         .position-card-top {
@@ -3141,6 +4283,103 @@ function Trade() {
           margin-top: 3px;
           color: #0f172a;
           font-size: 10px;
+        }
+
+        .position-edit-hint {
+          display: block;
+          margin-top: 9px;
+          color: #94a3b8;
+          font-size: 9px;
+          font-style: italic;
+        }
+
+        .position-edit-box {
+          margin-top: 11px;
+          padding: 11px;
+          border: 1px solid #bbf7d0;
+          border-radius: 8px;
+          background: #ffffff;
+          cursor: default;
+        }
+
+        .position-edit-fields {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+
+        .position-edit-fields label {
+          display: grid;
+          gap: 4px;
+          color: #64748b;
+          font-size: 9px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .position-edit-fields input {
+          width: 100%;
+          height: 34px;
+          padding: 0 9px;
+          outline: none;
+          color: #0f172a;
+          border: 1px solid #cfd8e3;
+          border-radius: 7px;
+          background: #ffffff;
+          font-size: 11px;
+        }
+
+        .position-edit-fields input:focus {
+          border-color: #16a34a;
+          box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.1);
+        }
+
+        .position-edit-error {
+          margin: 8px 0 0;
+          color: #b91c1c;
+          font-size: 10px;
+        }
+
+        .position-edit-actions {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .position-edit-actions button {
+          min-height: 34px;
+          border-radius: 7px;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .position-edit-cancel {
+          border: 1px solid #cbd5e1;
+          color: #334155;
+          background: #ffffff;
+        }
+
+        .position-edit-cancel:hover:not(:disabled) {
+          border-color: #94a3b8;
+          background: #f8fafc;
+        }
+
+        .position-edit-save {
+          border: none;
+          color: #ffffff;
+          background: #16a34a;
+        }
+
+        .position-edit-save:hover:not(:disabled) {
+          background: #15803d;
+        }
+
+        .position-edit-save:disabled,
+        .position-edit-cancel:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .close-position-button {
@@ -3206,6 +4445,185 @@ function Trade() {
           .trade-direction-grid,
           .position-details {
             grid-template-columns: 1fr;
+          }
+        }
+
+        .trade-confirm-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 40;
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          background: rgba(15, 23, 42, 0.52);
+          backdrop-filter: blur(3px);
+          animation: trade-confirm-fade-in 0.15s ease-out;
+        }
+
+        .trade-confirm-modal {
+          width: min(380px, 100%);
+          padding: 26px;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+          animation: trade-confirm-pop-in 0.18s ease-out;
+        }
+
+        .trade-confirm-icon {
+          width: 46px;
+          height: 46px;
+          margin-bottom: 14px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          font-size: 20px;
+          font-weight: 800;
+        }
+
+        .trade-confirm-icon.buy {
+          color: #16a34a;
+          background: #dcfce7;
+        }
+
+        .trade-confirm-icon.sell {
+          color: #dc2626;
+          background: #fee2e2;
+        }
+
+        .trade-confirm-icon.close {
+          color: #334155;
+          background: #e2e8f0;
+        }
+
+        .trade-confirm-modal h3 {
+          margin: 0 0 6px;
+          color: #0f172a;
+          font-size: 17px;
+          font-weight: 800;
+        }
+
+        .trade-confirm-modal > p {
+          margin: 0 0 16px;
+          color: #64748b;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .trade-confirm-details {
+          margin-bottom: 16px;
+          display: grid;
+          gap: 8px;
+          padding: 12px 14px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+
+        .trade-confirm-details span {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: #64748b;
+          font-size: 11px;
+        }
+
+        .trade-confirm-details span strong {
+          color: #0f172a;
+          font-size: 12px;
+        }
+
+        .trade-confirm-detail-group {
+          display: contents;
+        }
+
+        .trade-confirm-checkbox {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 18px;
+          color: #475569;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .trade-confirm-checkbox input {
+          width: 15px;
+          height: 15px;
+          accent-color: #16a34a;
+        }
+
+        .trade-confirm-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .trade-confirm-actions button {
+          min-height: 42px;
+          border-radius: 9px;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .trade-confirm-cancel {
+          border: 1px solid #cbd5e1;
+          color: #334155;
+          background: #ffffff;
+        }
+
+        .trade-confirm-cancel:hover {
+          border-color: #94a3b8;
+          background: #f8fafc;
+        }
+
+        .trade-confirm-proceed {
+          border: none;
+          color: #ffffff;
+        }
+
+        .trade-confirm-proceed.buy {
+          background: #16a34a;
+        }
+
+        .trade-confirm-proceed.buy:hover {
+          background: #15803d;
+        }
+
+        .trade-confirm-proceed.sell {
+          background: #dc2626;
+        }
+
+        .trade-confirm-proceed.sell:hover {
+          background: #b91c1c;
+        }
+
+        .trade-confirm-proceed.close {
+          background: #0f172a;
+        }
+
+        .trade-confirm-proceed.close:hover {
+          background: #1e293b;
+        }
+
+        @keyframes trade-confirm-fade-in {
+          from {
+            opacity: 0;
+          }
+
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes trade-confirm-pop-in {
+          from {
+            opacity: 0;
+            transform: scale(0.96) translateY(6px);
+          }
+
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
           }
         }
       `}</style>
@@ -3325,6 +4743,13 @@ function Trade() {
               clearRiskSetupSignal={
                 clearRiskSetupSignal
               }
+              requestConfirmation={
+                requestRiskEditConfirmation
+              }
+              editingPosition={editingPosition}
+              onPositionRiskEdit={
+                requestPositionRiskEditFromChart
+              }
             />
 
             <div className="trade-candle-stats">
@@ -3392,7 +4817,17 @@ function Trade() {
                     );
 
                     return (
-                      <article className="position-card" key={position._id}>
+                      <article
+                        className={`position-card ${
+                          editingPositionId === position._id
+                            ? "editing"
+                            : ""
+                        }`}
+                        key={position._id}
+                        onClick={() =>
+                          openPositionEdit(position)
+                        }
+                      >
                         <div className="position-card-top">
                           <span
                             className={`position-side ${position.side}`}
@@ -3451,11 +4886,126 @@ function Trade() {
                           </span>
                         </div>
 
+                        {editingPositionId !==
+                          position._id && (
+                          <span className="position-edit-hint">
+                            Click this position to edit
+                            Stop Loss / Take Profit.
+                          </span>
+                        )}
+
+                        {editingPositionId ===
+                          position._id && (
+                          <div
+                            className="position-edit-box"
+                            onClick={(event) =>
+                              event.stopPropagation()
+                            }
+                          >
+                            <div className="position-edit-fields">
+                              <label>
+                                Stop Loss
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="Not set"
+                                  value={
+                                    positionEditValues.stopLoss
+                                  }
+                                  onChange={(event) =>
+                                    setPositionEditValues(
+                                      (previous) => ({
+                                        ...previous,
+                                        stopLoss:
+                                          event.target
+                                            .value,
+                                      })
+                                    )
+                                  }
+                                  disabled={
+                                    isSavingPositionEdit
+                                  }
+                                />
+                              </label>
+
+                              <label>
+                                Take Profit
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="Not set"
+                                  value={
+                                    positionEditValues.takeProfit
+                                  }
+                                  onChange={(event) =>
+                                    setPositionEditValues(
+                                      (previous) => ({
+                                        ...previous,
+                                        takeProfit:
+                                          event.target
+                                            .value,
+                                      })
+                                    )
+                                  }
+                                  disabled={
+                                    isSavingPositionEdit
+                                  }
+                                />
+                              </label>
+                            </div>
+
+                            {positionEditError && (
+                              <p className="position-edit-error">
+                                {positionEditError}
+                              </p>
+                            )}
+
+                            <div className="position-edit-actions">
+                              <button
+                                type="button"
+                                className="position-edit-cancel"
+                                disabled={
+                                  isSavingPositionEdit
+                                }
+                                onClick={
+                                  closePositionEdit
+                                }
+                              >
+                                Cancel
+                              </button>
+
+                              <button
+                                type="button"
+                                className="position-edit-save"
+                                disabled={
+                                  isSavingPositionEdit
+                                }
+                                onClick={() =>
+                                  requestPositionRiskEdit(
+                                    position,
+                                    positionEditValues.stopLoss,
+                                    positionEditValues.takeProfit
+                                  )
+                                }
+                              >
+                                {isSavingPositionEdit
+                                  ? "Saving..."
+                                  : "Save changes"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           className="close-position-button"
                           disabled={closingTradeId === position._id}
-                          onClick={() => closePosition(position._id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            requestClosePosition(position);
+                          }}
                         >
                           {closingTradeId === position._id
                             ? "Closing..."
@@ -3546,7 +5096,7 @@ function Trade() {
                 type="button"
                 className="trade-buy-button"
                 disabled={orderControlsDisabled}
-                onClick={() => openPosition("buy")}
+                onClick={() => requestOpenPosition("buy")}
               >
                 <span>BUY</span>
                 <small>Profit if price rises</small>
@@ -3556,7 +5106,7 @@ function Trade() {
                 type="button"
                 className="trade-sell-button"
                 disabled={orderControlsDisabled}
-                onClick={() => openPosition("sell")}
+                onClick={() => requestOpenPosition("sell")}
               >
                 <span>SELL</span>
                 <small>Profit if price falls</small>
@@ -3581,6 +5131,246 @@ function Trade() {
           </aside>
         </div>
       </main>
+
+      {pendingConfirmation && (
+        <div
+          className="trade-confirm-overlay"
+          onClick={cancelPendingAction}
+        >
+          <div
+            className="trade-confirm-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {pendingConfirmation.type === "open" && (
+              <>
+                <div
+                  className={`trade-confirm-icon ${pendingConfirmation.side}`}
+                >
+                  {pendingConfirmation.side === "buy" ? "↑" : "↓"}
+                </div>
+
+                <h3>
+                  Confirm{" "}
+                  {pendingConfirmation.side === "buy" ? "Buy" : "Sell"}{" "}
+                  position
+                </h3>
+
+                <p>
+                  You are about to open a{" "}
+                  {pendingConfirmation.side === "buy" ? "Buy" : "Sell"}{" "}
+                  position on {selectedAsset.pair}.
+                </p>
+
+                <div className="trade-confirm-details">
+                  <span>
+                    Quantity
+                    <strong>
+                      {quantity} {selectedAsset.symbol}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Entry price
+                    <strong>
+                      {Number.isFinite(currentPrice)
+                        ? `$${formatMoney(currentPrice)}`
+                        : "—"}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Estimated value
+                    <strong>
+                      ${formatMoney(estimatedPositionValue)}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Stop Loss
+                    <strong>
+                      {stopLoss ? `$${formatMoney(stopLoss)}` : "Not set"}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Take Profit
+                    <strong>
+                      {takeProfit
+                        ? `$${formatMoney(takeProfit)}`
+                        : "Not set"}
+                    </strong>
+                  </span>
+                </div>
+              </>
+            )}
+
+            {pendingConfirmation.type === "close" && (
+              <>
+                <div className="trade-confirm-icon close">✕</div>
+
+                <h3>Confirm close position</h3>
+
+                <p>
+                  You are about to close your{" "}
+                  {pendingConfirmation.position.side === "sell"
+                    ? "Sell"
+                    : "Buy"}{" "}
+                  position on {pendingConfirmation.position.asset}.
+                </p>
+
+                <div className="trade-confirm-details">
+                  <span>
+                    Quantity
+                    <strong>
+                      {pendingConfirmation.position.quantity}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Entry price
+                    <strong>
+                      $
+                      {formatMoney(
+                        pendingConfirmation.position.entryPrice
+                      )}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Current price
+                    <strong>
+                      $
+                      {formatMoney(
+                        pendingConfirmation.position.currentPrice
+                      )}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Unrealized PnL
+                    <strong>
+                      {formatSignedMoney(
+                        pendingConfirmation.position
+                          .unrealizedProfitLoss
+                      )}
+                    </strong>
+                  </span>
+                </div>
+              </>
+            )}
+
+            {pendingConfirmation.type === "riskEdit" && (
+              <>
+                <div
+                  className={`trade-confirm-icon ${
+                    pendingConfirmation.side === "buy"
+                      ? "buy"
+                      : "sell"
+                  }`}
+                >
+                  ↕
+                </div>
+
+                <h3>
+                  Confirm{" "}
+                  {pendingConfirmation.changes
+                    .map((change) => change.label)
+                    .join(" & ")}{" "}
+                  change
+                  {pendingConfirmation.changes.length > 1
+                    ? "s"
+                    : ""}
+                </h3>
+
+                <p>
+                  You are updating the risk levels for your{" "}
+                  {pendingConfirmation.side === "buy"
+                    ? "Buy"
+                    : "Sell"}{" "}
+                  position on {pendingConfirmation.asset.pair}.
+                </p>
+
+                <div className="trade-confirm-details">
+                  {pendingConfirmation.changes.map(
+                    (change) => (
+                      <div
+                        className="trade-confirm-detail-group"
+                        key={change.label}
+                      >
+                        <span>
+                          Previous {change.label}
+                          <strong>
+                            {change.oldPrice
+                              ? `$${formatMoney(
+                                  change.oldPrice
+                                )}`
+                              : "Not set"}
+                          </strong>
+                        </span>
+
+                        <span>
+                          New {change.label}
+                          <strong>
+                            {change.newPrice
+                              ? `$${formatMoney(
+                                  change.newPrice
+                                )}`
+                              : "Not set"}
+                          </strong>
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
+            )}
+
+            <label className="trade-confirm-checkbox">
+              <input
+                type="checkbox"
+                checked={skipConfirmChecked}
+                onChange={(event) =>
+                  setSkipConfirmChecked(event.target.checked)
+                }
+              />
+              Don&apos;t ask me again
+            </label>
+
+            <div className="trade-confirm-actions">
+              <button
+                type="button"
+                className="trade-confirm-cancel"
+                onClick={cancelPendingAction}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className={`trade-confirm-proceed ${
+                  pendingConfirmation.type === "open"
+                    ? pendingConfirmation.side
+                    : "close"
+                }`}
+                onClick={confirmPendingAction}
+              >
+                {pendingConfirmation.type === "open" &&
+                  `Confirm ${
+                    pendingConfirmation.side === "buy" ? "Buy" : "Sell"
+                  }`}
+
+                {pendingConfirmation.type === "close" &&
+                  "Confirm Close"}
+
+                {pendingConfirmation.type === "riskEdit" &&
+                  `Confirm ${pendingConfirmation.changes
+                    .map((change) => change.label)
+                    .join(" & ")}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
