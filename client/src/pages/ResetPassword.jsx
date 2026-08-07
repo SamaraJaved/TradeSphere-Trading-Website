@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import API_URL from "../config/api";
 
 function ResetPassword() {
   const location = useLocation();
@@ -64,7 +65,7 @@ function ResetPassword() {
       setIsLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/reset-password",
+        `${API_URL}/api/auth/reset-password`,
         {
           method: "POST",
           headers: {

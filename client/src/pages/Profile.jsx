@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import AppNavigation from "../components/AppNavigation";
+import API_URL from "../config/api";
 
 function Profile() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ function Profile() {
         setIsLoadingProfile(true);
 
         const response = await fetch(
-          "http://localhost:5000/api/users/profile",
+          `${API_URL}/api/users/profile`,
           {
             method: "GET",
             headers: {
@@ -199,7 +200,7 @@ function Profile() {
       setIsSavingProfile(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/users/profile",
+        `${API_URL}/api/users/profile`,
         {
           method: "PATCH",
           headers: {
@@ -314,7 +315,7 @@ function Profile() {
       setIsChangingPassword(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/users/change-password",
+        `${API_URL}/api/users/change-password`,
         {
           method: "PATCH",
           headers: {

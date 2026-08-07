@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import API_URL from "../config/api";
 
 function VerifyEmail() {
   const location = useLocation();
@@ -37,7 +38,7 @@ function VerifyEmail() {
       setIsLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/verify-email",
+        `${API_URL}/api/auth/verify-email`,
         {
           method: "POST",
           headers: {
@@ -97,7 +98,7 @@ function VerifyEmail() {
       setIsResending(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/resend-verification",
+        `${API_URL}/api/auth/resend-verification`,
         {
           method: "POST",
           headers: {

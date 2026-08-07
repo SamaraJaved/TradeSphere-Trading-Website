@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import API_URL from "../config/api";
 
 function ForgotPassword() {
   const location = useLocation();
@@ -26,7 +27,7 @@ function ForgotPassword() {
       setIsLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/forgot-password",
+        `${API_URL}/api/auth/forgot-password`,
         {
           method: "POST",
           headers: {

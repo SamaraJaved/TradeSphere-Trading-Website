@@ -5,7 +5,7 @@ import {
   useNavigate,
 } from "react-router";
 
-const API_URL = "http://localhost:5000";
+import API_URL from "../config/api";
 
 const navigationLinks = [
   {

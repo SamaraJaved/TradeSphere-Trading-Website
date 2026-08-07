@@ -19,8 +19,8 @@ import {
 } from "lightweight-charts";
 
 import AppNavigation from "../components/AppNavigation";
+import API_URL from "../config/api";
 
-const API_URL = "http://localhost:5000";
 const HISTORICAL_CANDLE_LIMIT = 120;
 const MAX_CANDLES = 200;
 
