@@ -14,6 +14,16 @@ function createTransporter() {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_APP_PASSWORD,
     },
+
+    /*
+      Without these, a stalled connection to Gmail's SMTP
+      servers (seen on some cloud hosts, e.g. Railway) hangs
+      the request indefinitely instead of failing fast, since
+      Nodemailer's own defaults for these are several minutes.
+    */
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
